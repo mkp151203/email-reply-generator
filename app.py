@@ -7,6 +7,11 @@ API_KEY = "zPhBdlG1nNh_bvWS3pMBzEfsA09FNJbeqprI3HHLsjj1"
 PROJECT_ID = "2c0ccefb-ce25-4fa9-816b-af1ef05cba09"
 REGION = "eu-de"  # Frankfurt region
 
+from transformers import pipeline
+
+# Load Google fallback model (Flan-T5) once
+def load_google_model():
+    return pipeline("text2text-generation", model="google/flan-t5-base")
 
 st.set_page_config(
     page_title="AI Email Reply Generator",
@@ -27,7 +32,7 @@ email_text = st.text_area(
 )
 
 # IBM Token Fetch
-@st.cache_resource
+
 def get_iam_token():
     try:
         url = "https://iam.cloud.ibm.com/identity/token"
@@ -93,6 +98,18 @@ def clean_response(response):
             cleaned_lines.append(line)
     
     return '\n'.join(cleaned_lines)
+def generate_reply_google(email_content, tone):
+    tone_prompt = {
+        "Formal": "Write a professional and formal reply to the email below.",
+        "Friendly": "Write a warm and friendly reply to the email below.",
+        "Concise": "Write a short and polite reply to the email below."
+    }
+
+    prompt = f"{tone_prompt[tone]}\n\nEmail: {email_content.strip()}\n\nReply:"
+    
+    google_model = load_google_model()
+    output = google_model(prompt, max_length=150, do_sample=True, temperature=0.7)[0]["generated_text"]
+    return output.strip()
 
 
 def generate_reply_granite(email_content, tone):
@@ -173,28 +190,27 @@ st.sidebar.info("""
 """)
 
 
+# ---------------------------------------------------------------------------
+# Generate reply for user-provided email
+# ---------------------------------------------------------------------------
 if st.button("✨ Generate Reply"):
     if email_text.strip() == "":
         st.warning("Please enter an email to generate a reply.")
     else:
         with st.spinner("Generating reply using IBM Granite 13B Instruct..."):
-            try:
-                result = generate_reply_granite(email_text.strip(), tone)
-                
-                if not result.startswith("Error:"):
-                    st.success("✅ Here is your AI-generated reply:")
-                    st.text_area("✉️ Generated Reply", value=result, height=150, key="reply_output")
-                    
-                    # Copy-friendly format
-                    st.markdown("### 📋 Copy-friendly format:")
-                    st.code(result, language="text")
-                    
-                else:
-                    st.error(result)
-                    
-            except Exception as e:
-                st.error(f"Something went wrong: {str(e)}")
+            result = generate_reply_granite(email_text.strip(), tone)
 
+            if result.startswith("Error:"):
+                st.toast("⚠️ IBM model failed. Falling back to Google Flan-T5...", icon="⚠️")
+                result = generate_reply_google(email_text.strip(), tone)
+
+            if not result.startswith("Error:"):
+                st.success("✅ Here is your AI-generated reply:")
+                st.text_area("✉️ Generated Reply", value=result, height=150, key="reply_output")
+                st.markdown("### 📋 Copy-friendly format:")
+                st.code(result, language="text")
+            else:
+                st.toast(result, icon="❌")
 
 st.markdown("---")
 st.subheader("💡 Example Usage")
@@ -210,10 +226,16 @@ Sarah"""
 
 if st.button("Try Example Email"):
     st.text_area("Example Email", value=example_email, height=120, key="example_email")
-    
+
     with st.spinner("Generating example reply..."):
         result = generate_reply_granite(example_email, "Formal")
-        if not result.startswith("Error:"):
-            st.success("Example Reply Generated:")
-            st.text_area("Example Reply", value=result, height=120, key="example_reply")
 
+        if result.startswith("Error:"):
+            st.toast("⚠️ IBM model failed. Falling back to Google Flan-T5...", icon="⚠️")
+            result = generate_reply_google(example_email, "Formal")
+
+        if not result.startswith("Error:"):
+            st.success("✅ Example Reply Generated:")
+            st.text_area("Example Reply", value=result, height=120, key="example_reply")
+        else:
+            st.toast(result, icon="❌")
