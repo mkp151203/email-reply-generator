@@ -53,43 +53,18 @@ def format_granite_instruct_prompt(email_content, tone):
     }
     prompt = f"""Instruction: You are a professional email assistant. {tone_instructions[tone]}
 
-Original email to reply to:
+Original Email:
+\"\"\"
 {email_content}
+\"\"\"
 
-Task: Write an appropriate email reply that addresses the content of the original email.
-
-Email Reply:"""
+Reply:"""
     return prompt
 
 def clean_response(response):
-    response = response.strip()
-    if "Instruction:" in response:
-        parts = response.split("Email Reply:")
-        if len(parts) > 1:
-            response = parts[-1].strip()
-    lines = response.split('\n')
-    cleaned_lines = []
-    for line in lines:
-        line = line.strip()
-        if line and not any(skip in line.lower() for skip in [
-            "original email to reply to:",
-            "task:",
-            "instruction:",
-            "email reply:"
-        ]):
-            cleaned_lines.append(line)
-    return '\n'.join(cleaned_lines)
-
-def generate_reply_google(email_content, tone):
-    tone_prompt = {
-        "Formal": "Write a professional and formal reply to the email below.",
-        "Friendly": "Write a warm and friendly reply to the email below.",
-        "Concise": "Write a short and polite reply to the email below."
-    }
-    prompt = f"{tone_prompt[tone]}\n\nEmail: {email_content.strip()}\n\nReply:"
-    google_model = load_google_model()
-    output = google_model(prompt, max_length=150, do_sample=True, temperature=0.7)[0]["generated_text"]
-    return output.strip()
+    if "Reply:" in response:
+        response = response.split("Reply:")[-1]
+    return response.strip()
 
 def generate_reply_granite(email_content, tone):
     token = get_iam_token()
@@ -105,12 +80,11 @@ def generate_reply_granite(email_content, tone):
         "model_id": "ibm/granite-13b-instruct-v2",
         "input": formatted_prompt,
         "parameters": {
-            "decoding_method": "greedy",
-            "max_new_tokens": 200,
-            "temperature": 0.1,
-            "top_p": 1.0,
-            "top_k": 50,
-            "stop_sequences": ["Instruction:", "Original email:", "Task:", "\n\n\n"]
+            "decoding_method": "sample",
+            "max_new_tokens": 250,
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "top_k": 50
         },
         "project_id": PROJECT_ID
     }
@@ -137,6 +111,18 @@ def generate_reply_granite(email_content, tone):
         with st.expander("⚠️ Exception during IBM request"):
             st.write(str(e))
         return f"Error: {str(e)}"
+
+def generate_reply_google(email_content, tone):
+    tone_prompt = {
+        "Formal": "Write a professional and formal reply to the email below.",
+        "Friendly": "Write a warm and friendly reply to the email below.",
+        "Concise": "Write a short and polite reply to the email below."
+    }
+    prompt = f"{tone_prompt[tone]}\n\nEmail: {email_content.strip()}\n\nReply:"
+    google_model = load_google_model()
+    output = google_model(prompt, max_length=150, do_sample=True, temperature=0.7)[0]["generated_text"]
+    return output.strip()
+
 
 def test_connection():
     token = get_iam_token()
