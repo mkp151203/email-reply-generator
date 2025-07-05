@@ -3,9 +3,9 @@ import requests
 import json
 from transformers import pipeline
 
-API_KEY = "zPhBdlG1nNh_bvWS3pMBzEfsA09FNJbeqprI3HHLsjj1"
-PROJECT_ID = "2c0ccefb-ce25-4fa9-816b-af1ef05cba09"
-REGION = "eu-de"
+API_KEY = st.secrets["ibm"]["API_KEY"]
+PROJECT_ID = st.secrets["ibm"]["PROJECT_ID"]
+REGION = st.secrets["ibm"]["REGION"]
 
 def load_google_model():
     return pipeline("text2text-generation", model="google/flan-t5-base")
